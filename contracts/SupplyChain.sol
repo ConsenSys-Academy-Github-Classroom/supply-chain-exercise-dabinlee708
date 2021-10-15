@@ -3,48 +3,53 @@ pragma solidity >=0.5.16 <0.9.0;
 
 contract SupplyChain {
 
-  // <owner>
-  address owner = msg.sender;
-  enum State{ ForSale, Sold, Shipped, Received}
-  mapping (uint => Item) public items;
-  struct Item { 
+  event LogForSale(uint sku);
+  event LogSold(uint sku);
+  event LogShipped(uint sku);
+  event LogReceived(uint sku);
+
+  enum State {
+    ForSale,
+    Sold,
+    Shipped,
+    Received
+  }
+
+  struct Item {
     string name;
     uint sku;
     uint price;
-    enum State;
     address seller;
     address buyer;
- }
+    State state;
+  }
 
+  mapping (uint => Item) public items;
+  address owner;
+  uint skuCount;
+
+  // <owner>
   // <skuCount>
-
   // <items mapping>
-
   // <enum State: ForSale, Sold, Shipped, Received>
-
   // <struct Item: name, sku, price, state, seller, and buyer>
-  
   /* 
    * Events
    */
-
   // <LogForSale event: sku arg>
-  event LogEnrolled(uint sku);
-
   // <LogSold event: sku arg>
-
   // <LogShipped event: sku arg>
-
   // <LogReceived event: sku arg>
-
-
   /* 
    * Modifiers
    */
-
   // Create a modifer, `isOwner` that checks if the msg.sender is the owner of the contract
 
   // <modifier: isOwner
+  modifier isOwner(address _address){
+    require(msg.sender == _address);
+    _;
+  }
 
   modifier verifyCaller (address _address) { 
     require (msg.sender == _address); 
@@ -72,37 +77,49 @@ contract SupplyChain {
   // that an Item is for sale. Hint: What item properties will be non-zero when
   // an Item has been added?
 
-  modifier forSale
-  modifier sold(uint _sku) 
-  modifier shipped(uint _sku) 
-  modifier received(uint _sku) 
-
-  constructor() public {
-    // 1. Set the owner to the transaction sender
-    // 2. Initialize the sku count to 0. Question, is this necessary?
+  modifier forSale(uint _sku){
+    require(items[_sku].price != 0);
+    _;
   }
 
-  function addItem(string memory _name, uint _price) public returns (bool) {
+  modifier sold(uint _sku) {
+    require(items[_sku].state == "Sold");
+    _;
+  }
+  
+  modifier shipped(uint _sku){
+    require(items[_sku].state == "Shipped");
+    _;
+  }
+
+  modifier received(uint _sku){
+    require(items[_sku].state == "Received");
+    _;
+  }
+
+  constructor() public{
+    owner = msg.sender;
+    skuCount = 0 ;
+  }
+
+  function addItem(string memory _name, uint _price) public payable returns (bool) {
+    items[skuCount] = Item({
+      name: _name,
+      sku: skuCount,
+      price: _price,
+      state: State.ForSale,
+      seller: msg.sender,
+      buyer: address(0)
+    });
+    skuCount += 1;
+    emit LogForSale(skuCount);
+    return true
     // 1. Create a new item and put in array
     // 2. Increment the skuCount by one
     // 3. Emit the appropriate event
     // 4. return true
-
-    // hint:
-    // items[skuCount] = Item({
-    //  name: _name, 
-    //  sku: skuCount, 
-    //  price: _price, 
-    //  state: State.ForSale, 
-    //  seller: msg.sender, 
-    //  buyer: address(0)
-    //});
-    //
-    //skuCount = skuCount + 1;
-    // emit LogForSale(skuCount);
-    // return true;
   }
-
+  
   // Implement this buyItem function. 
   // 1. it should be payable in order to receive refunds
   // 2. this should transfer money to the seller, 
@@ -114,21 +131,31 @@ contract SupplyChain {
   //    - check the value after the function is called to make 
   //      sure the buyer is refunded any excess ether sent. 
   // 6. call the event associated with this function!
-  function buyItem(uint sku) public {}
+  function buyItem(uint sku) public payable forSale paidEnough checkValue {
+    items[sku].buyer = msg.sender;
+    items[sku].state = "Sold";
+    emit LogSold(sku);
+  }
 
   // 1. Add modifiers to check:
   //    - the item is sold already 
   //    - the person calling this function is the seller. 
   // 2. Change the state of the item to shipped. 
   // 3. call the event associated with this function!
-  function shipItem(uint sku) public {}
+  function shipItem(uint sku) public isowner sold {
+    items[sku].state = "Shipped";
+    emit LogShipped(sku);
+  }
 
   // 1. Add modifiers to check 
   //    - the item is shipped already 
   //    - the person calling this function is the buyer. 
   // 2. Change the state of the item to received. 
   // 3. Call the event associated with this function!
-  function receiveItem(uint sku) public {}
+  function receiveItem(uint sku) public isowner shipped {
+    items[sku].state = "Received";
+    emit LogReceived(sku);
+  }
 
   // Uncomment the following code block. it is needed to run tests
    function fetchItem(uint _sku) public view
