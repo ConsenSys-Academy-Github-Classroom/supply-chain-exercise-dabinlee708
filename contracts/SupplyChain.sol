@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.5.16 <0.9.0;
+pragma solidity ^0.5.16 <0.9.0;
 
 contract SupplyChain {
 
@@ -19,14 +19,14 @@ contract SupplyChain {
     string name;
     uint sku;
     uint price;
-    address seller;
-    address buyer;
+    address payable seller;
+    address payable buyer;
     State state;
   }
 
   mapping (uint => Item) public items;
-  address owner;
-  uint skuCount;
+  address public owner;
+  uint public skuCount;
 
   // <owner>
   // <skuCount>
@@ -46,8 +46,8 @@ contract SupplyChain {
   // Create a modifer, `isOwner` that checks if the msg.sender is the owner of the contract
 
   // <modifier: isOwner
-  modifier isOwner(address _address){
-    require(msg.sender == _address);
+  modifier isOwner(){
+    require(owner == msg.sender);
     _;
   }
 
@@ -79,21 +79,23 @@ contract SupplyChain {
 
   modifier forSale(uint _sku){
     require(items[_sku].price != 0);
+    require(items[_sku].buyer == address(0));
+    require(items[_sku].state == State.ForSale);
     _;
   }
 
   modifier sold(uint _sku) {
-    require(items[_sku].state == "Sold");
+    require(items[_sku].state == State.Sold);
     _;
   }
   
   modifier shipped(uint _sku){
-    require(items[_sku].state == "Shipped");
+    require(items[_sku].state == State.Shipped);
     _;
   }
 
   modifier received(uint _sku){
-    require(items[_sku].state == "Received");
+    require(items[_sku].state == State.Received);
     _;
   }
 
@@ -113,10 +115,10 @@ contract SupplyChain {
     });
     skuCount += 1;
     emit LogForSale(skuCount);
-    return true
+    return true;
     // 1. Create a new item and put in array
     // 2. Increment the skuCount by one
-    // 3. Emit the appropriate event
+    // 3. Emit the appropriate eventgutlojl/
     // 4. return true
   }
   
@@ -131,9 +133,10 @@ contract SupplyChain {
   //    - check the value after the function is called to make 
   //      sure the buyer is refunded any excess ether sent. 
   // 6. call the event associated with this function!
-  function buyItem(uint sku) public payable forSale paidEnough checkValue {
+  function buyItem(uint sku) public payable forSale(sku) paidEnough(items[sku].price) checkValue(sku) {
+    items[sku].seller.transfer(items[sku].price);
     items[sku].buyer = msg.sender;
-    items[sku].state = "Sold";
+    items[sku].state = State.Sold;
     emit LogSold(sku);
   }
 
@@ -142,8 +145,8 @@ contract SupplyChain {
   //    - the person calling this function is the seller. 
   // 2. Change the state of the item to shipped. 
   // 3. call the event associated with this function!
-  function shipItem(uint sku) public isowner sold {
-    items[sku].state = "Shipped";
+  function shipItem(uint sku) public verifyCaller(items[sku].seller) sold(sku) {
+    items[sku].state = State.Shipped;
     emit LogShipped(sku);
   }
 
@@ -152,8 +155,8 @@ contract SupplyChain {
   //    - the person calling this function is the buyer. 
   // 2. Change the state of the item to received. 
   // 3. Call the event associated with this function!
-  function receiveItem(uint sku) public isowner shipped {
-    items[sku].state = "Received";
+  function receiveItem(uint sku) public verifyCaller(items[sku].buyer) shipped(sku) {
+    items[sku].state = State.Received;
     emit LogReceived(sku);
   }
 
